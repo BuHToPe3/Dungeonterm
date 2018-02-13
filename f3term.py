@@ -698,12 +698,15 @@ def TgameScreen():
         wordLen = 6
     elif wordLen > 12:
         wordLen = 12
+    elif wordLen not in [6, 8, 10, 12]:
+        wordLen = 10
     if numTries < 1 or numTries > 9:
         numTries = 9
     if wordNum < 4:
         wordNum = 4
     elif wordNum > 25:
         wordNum = 25
+
     triesPositions = []
     for t in range(0,numTries):
         triesPositions.append(61+2*t)
