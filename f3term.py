@@ -23,10 +23,10 @@ posWords = []
 powerStatus = 1
 termHackStatus = 0
 termLockStatus = 0
-wordNum = 12
-wordLen = 8
-numTries = 4
-wordCount = 0
+#wordNum = 12
+#wordLen = 8
+#numTries = 4
+#wordCount = 0
 
 
 myTime = 30
@@ -45,7 +45,7 @@ statWord = []
 wordChoice = []
 servAreaTxt = ' ' * 192
 servArea = []
-idAst = [67, 65, 63, 61]
+
 
 lasHlPos = 0
 lastHlLen = 0
@@ -102,6 +102,7 @@ forceClose = False # Флаг, который смотрят все потоки
 lineY = -200
 lineTime = 0
 dbCheckInterval = 2# Интервал проверки БД в секундах
+db_updated = False #Когда флаг установлен, означает, что пришло обновление БД и требуется обновить состояние экрана терминала, напр. перезапустить взлом.
 
 #END
 
@@ -438,6 +439,7 @@ def compareWords(word_1, word_2):
 
 def Ton_message(client, userdata, msg):
     global my_ip
+    global db_updated
     try:
         print(msg.payload.decode("UTF-8",errors="ignore"))
         commList = msg.payload.decode("UTF-8",errors="ignore").split('/')
@@ -459,6 +461,7 @@ def Ton_message(client, userdata, msg):
                 pars = json.loads(commList[2])
                 updateDBParameters(pars)
                 client.publish("TERMASK",my_ip+'/UPDATE_OK')
+                db_updated = True
             except:
                 client.publish("TERMASK",my_ip+'/UPDATE_FAILED')
     except Exception as err:
@@ -516,7 +519,7 @@ def updateDBParameters(parameters):
     finally:
         is_db_updating = False
 
-def loadWordsAndSelectPassword():
+def loadWordsAndSelectPassword(wordLen):
     words = []
     with open('words'+str(wordLen)+'.txt','r') as f:
         for word in f:
@@ -676,25 +679,42 @@ def drawScreen():
 
 def TgameScreen():
     #Бывш. mainScreen
-    global wordNum
+    #global wordNum
     global statX
     global statY
     global deltaX
     global deltaY
     global db_parameters
     global forceClose
+    global db_updated
+
+
     leftBrakes = ('[', '(', '{', '<')
     rightBrakes = (']', ')', '}', '>')
     wordLen = db_parameters["wordLength"]
-    numTries = db_parameters['attempts']
+    numTries = db_parameters["attempts"]
+    wordNum = db_parameters["wordsPrinted"]
+    if wordLen < 6:
+        wordLen = 6
+    elif wordLen > 12:
+        wordLen = 12
+    if numTries < 1 or numTries > 9:
+        numTries = 9
+    if wordNum < 4:
+        wordNum = 4
+    elif wordNum > 25:
+        wordNum = 25
+    triesPositions = []
+    for t in range(0,numTries):
+        triesPositions.append(61+2*t)
     hlPos = 0
     hlLen = 0
     selectedWords = []
     selectedPass = ""
 
     #Выбор нового пароля непосредственно перед игрой.
-    wordBase, wordCount, wordPass = loadWordsAndSelectPassword()
-    selectedWords, selectedPass = TwordsParse(wordBase, wordLen, wordPass)
+    wordBase, wordCount, wordPass = loadWordsAndSelectPassword(wordLen)
+    selectedWords, selectedPass = TwordsParse(wordBase, wordLen, wordPass, wordNum)
     garbStr, posWords = TformOutString(wordLen, wordNum, selectedWords, garbLen)
 
 
@@ -774,6 +794,10 @@ def TgameScreen():
             # Читаем базу
             if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or db_parameters["isHacked"]:
                 return
+            if db_updated:
+                db_updated = False
+                return
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                     forceClose = True
@@ -891,8 +915,10 @@ def TgameScreen():
                     ntY = fieldArea[53].y
                     fieldArea[53].clear()
                     fieldArea[53] = outSym(ntX, ntY, sX, sY, str(numTries))
+                    print(numTries)
                     fieldArea[53].output()
-                    fieldArea[idAst[numTries]].clear()
+                    print(triesPositions[numTries])
+                    fieldArea[triesPositions[numTries]].clear()
                     if numTries == 0:
                         # Залочились
                         updateDBParameters({"isLocked":"YES"})
@@ -990,6 +1016,9 @@ def TmenuScreen():
     global statY
     global db_parameters
     global forceClose
+    global db_updated
+
+
 
     if menuStatus == 1:
         return
@@ -1035,8 +1064,10 @@ def TmenuScreen():
         mscTime = millis()
         if (mscTime >= (mssTime + 3000)):
             mssTime =  mscTime
-
             if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or not db_parameters["isHacked"]:
+                return
+            if db_updated:
+                db_updated = False
                 return
 
         for event in pygame.event.get():
@@ -1089,6 +1120,7 @@ def TmenuScreen():
 def TletterScreen():
 
     global forceClose
+    global db_updated
 
     def showLetterPage(pageNumber):
 
@@ -1137,7 +1169,7 @@ def TletterScreen():
             for part in range(0, lineParts):
                 text = line[lineLength*part:lineLength*(part+1)]
                 if not text.endswith(" ") and not text.endswith("\t"):
-                    text += "-"
+                    text += " "
                 pageData += text + "\n"
                 lineCountOnPage += 1
                 lineCount += 1
@@ -1170,6 +1202,9 @@ def TletterScreen():
             mssTime =  mscTime
             # Читаем базу
             if not db_parameters["isPowerOn"] or db_parameters["isLocked"] or not db_parameters["isHacked"]:
+                return
+            if db_updated:
+                db_updated = False
                 return
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -1209,14 +1244,19 @@ def TletterScreen():
 def TstartTerminal():
     #Основной игровой цикл.
     global db_parameters
+    global db_updated
+
     previous_state = "" #Предыдущее состояние терминала. Если не совпадает с текущим - будет выполнена очистка и перерисовка экрана. # Unpowerd - нет питания. Locked  - заблокирован. Hacked - взломан. Normal - запитан, ждет взлома.
     allscrReset()
     while True:
+        db_updated = False
+        print(previous_state)
         print("Menu")
         if forceClose:
             break
         while is_db_updating:#Ожидаем, пока обновится состояние из БД.
             pass
+
         # Проверяем: 1. Есть ли питание. 2. Не заблокирован ли терминал. Если все в порядке, показываем игру. После взлома показываем меню.
         if not db_parameters["isPowerOn"]:
             if previous_state != "Unpowered":
