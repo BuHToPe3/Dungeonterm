@@ -461,9 +461,16 @@ def Ton_message(client, userdata, msg):
                 pars = json.loads(commList[2])
                 if "msgBody" in pars.keys():
                     pars["msgBody"] = "\n".join(pars["msgBody"])
+
                 updateDBParameters(pars)
                 client.publish("TERMASK",my_ip+'/UPDATE_OK')
-                db_updated = True
+                updatedKeys = list(pars.keys())
+                if "msgBody" in updatedKeys:
+                    updatedKeys.remove("msgBody")
+                if "msgHead" in updatedKeys:
+                    updatedKeys.remove("msgHead")
+                if len(updatedKeys) > 0:
+                    db_updated = True
             except Exception as err:
                 print(err)
                 client.publish("TERMASK",my_ip+'/UPDATE_FAILED')
