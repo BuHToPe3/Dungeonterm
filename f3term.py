@@ -459,10 +459,13 @@ def Ton_message(client, userdata, msg):
         elif commList[1] == "UPDATEDB":
             try:
                 pars = json.loads(commList[2])
+                if "msgBody" in pars.keys():
+                    pars["msgBody"] = "\n".join(pars["msgBody"])
                 updateDBParameters(pars)
                 client.publish("TERMASK",my_ip+'/UPDATE_OK')
                 db_updated = True
-            except:
+            except Exception as err:
+                print(err)
                 client.publish("TERMASK",my_ip+'/UPDATE_FAILED')
     except Exception as err:
         client.publish("TERMASK", my_ip+"/COMMAND_FAILED/"+str(err))
@@ -476,7 +479,7 @@ def readDBParameters(checkInterval=2):
         if forceClose:
             break
         if not is_db_updating:
-            print("Reading DB.")
+            #print("Reading DB.")
             is_db_updating = True
             conn = sqlite3.connect(r'ft.db')
             req = conn.cursor()
@@ -927,16 +930,16 @@ def TgameScreen():
                         updateDBParameters({"isLocked":"YES"})
                         db_parameters["isLocked"] = True
                         pygame.time.wait(1000)
-                        #if mqttFlag:
-                        #    client.publish('TERMASK', my_ip + '/Lock_status/YES')
+                        if mqttFlag:
+                            client.publish('TERMASK', my_ip + '/LOCKED')
                         return
                 else:
                     # Угадали слово
                     updateDBParameters({"isHacked":"YES"})
                     db_parameters["isHacked"] = True
                     pygame.time.wait(1000)
-                    #if mqttFlag:
-                    #    client.publish('TERMASK', my_ip + '/Hack_status/YES')
+                    if mqttFlag:
+                        client.publish('TERMASK', my_ip + '/HACKED')
                     return
             else:
                 # выбрана последовательность знаков в скобках
@@ -1111,14 +1114,14 @@ def TmenuScreen():
                     updateDBParameters({"isLockOpen":"YES"})
                     pygame.time.wait(100)
                     if mqttFlag:
-                         client.publish('TERMASK', my_ip + '/DOLOCKOPEN/YES')
+                         client.publish('TERMASK', my_ip + '/DOLOCKOPEN')
             if selItem == '2':
                 # Выбрано снизить уровень тревоги
                 if not db_parameters["isLevelDown"]:
                     updateDBParameters({"isLevelDown":"YES"})
                     pygame.time.wait(100)
                     if mqttFlag:
-                         client.publish('TERMASK', my_ip + '/DOLEVELDOWN/YES')
+                         client.publish('TERMASK', my_ip + '/DOLEVELDOWN')
 
 def TletterScreen():
 
